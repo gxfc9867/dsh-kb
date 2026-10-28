@@ -127,6 +127,24 @@ test('listTrash 空目录返回空列表；多条按删除时间倒序', () => {
   }
 })
 
+test('文件名含 __ 时回收站往返不串路径（base64url 编码，回归）', () => {
+  const { root, trash } = setup()
+  writePage(root, 'wiki/my__notes.md', '双下划线\n')
+  writePage(root, 'wiki/sub/a__b/c.md', '嵌套\n')
+  core.trashDoc(root, trash, 'wiki/my__notes.md')
+  core.trashDoc(root, trash, 'wiki/sub/a__b/c.md')
+
+  const items = core.listTrash(trash).items
+  assert.equal(items.length, 2)
+  assert.ok(items.some((it) => it.rel === 'wiki/my__notes.md'), '含 __ 的文件名必须原样解码')
+  assert.ok(items.some((it) => it.rel === 'wiki/sub/a__b/c.md'))
+
+  for (const it of items) {
+    core.restoreTrash(root, trash, it.entry)
+    assert.ok(fs.existsSync(path.join(root, it.rel)), '还原后应回到原路径: ' + it.rel)
+  }
+})
+
 test('trashDoc 拒绝不存在的文件与越界路径', () => {
   const { root, trash } = setup()
   assert.throws(() => core.trashDoc(root, trash, 'wiki/none.md'), /不存在/)

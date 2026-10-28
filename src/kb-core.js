@@ -493,11 +493,17 @@ function trashableRel(rel) {
   return r
 }
 function trashStamp() { return new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '') }
-function encodeTrashName(rel, stamp) { return rel.split('/').join('__') + '.del-' + stamp + '-' + crypto.randomBytes(3).toString('hex') }
+// rel 用 base64url 编码进文件名：可逆且无歧义。不能按分隔符平铺（如把 '/' 换成 '__'）——
+// 文件名本身含 '__' 时还原会被错误解码成子目录，路径错乱。
+function encodeTrashName(rel, stamp) { return Buffer.from(rel, 'utf8').toString('base64url') + '.del-' + stamp + '-' + crypto.randomBytes(3).toString('hex') }
 function decodeTrashName(name) {
   const m = /^(.*)\.del-(\d{8}T\d{6})-([0-9a-f]{6})$/.exec(String(name || ''))
   if (!m) return null
-  return { rel: m[1].split('__').join('/'), stamp: m[2] }
+  try {
+    const rel = Buffer.from(m[1], 'base64url').toString('utf8')
+    if (Buffer.from(rel, 'utf8').toString('base64url') !== m[1]) return null // 非规范化输入（伪造/损坏）一律拒收
+    return { rel, stamp: m[2] }
+  } catch { return null }
 }
 function safeTrashPath(trashKbDir, entry) {
   const p = path.join(trashKbDir, path.basename(String(entry || '')))
